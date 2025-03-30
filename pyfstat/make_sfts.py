@@ -1,4 +1,6 @@
 """PyFstat tools to generate and manipulate data in the form of SFTs."""
+#### (Damon Cheung) 
+#### Extend the signal parameter input to support up to 4th order frequency evolution parameters
 
 import glob
 import logging
@@ -41,6 +43,8 @@ class Writer(BaseSearchClass):
         "F0",
         "F1",
         "F2",
+        "F3",
+        "F4",
         "Alpha",
         "Delta",
         "h0",
@@ -66,7 +70,7 @@ class Writer(BaseSearchClass):
     """
 
     required_signal_parameters = [
-        # leaving out "F1","F2","psi","phi","tref" as they have defaults
+        # leaving out "F1","F2","F3","F4","psi","phi","tref" as they have defaults
         "F0",
         "Alpha",
         "Delta",
@@ -87,6 +91,8 @@ class Writer(BaseSearchClass):
         F0=None,
         F1=0,
         F2=0,
+        F3=0,
+        F4=0,
         Alpha=None,
         Delta=None,
         h0=None,
@@ -143,7 +149,7 @@ class Writer(BaseSearchClass):
             Also needed when noise-only (`h0=None` or `h0==0`)
             but no `noiseSFTs` given,
             in which case it is also used as center of frequency band.
-        F1, F2, Alpha, Delta, h0, cosi, psi, phi: float or None
+        F1, F2, F3, F4, Alpha, Delta, h0, cosi, psi, phi: float or None
             Additional frequency evolution and amplitude parameters for a signal.
             If `h0=None` or `h0=0`, these are all ignored.
             If `h0>0`, then at least `[Alpha,Delta,cosi]` need to be set explicitly.
@@ -440,7 +446,7 @@ class Writer(BaseSearchClass):
 
         os.makedirs(self.outdir, exist_ok=True)
         self.config_file_name = os.path.join(self.outdir, self.label + ".cff")
-        self.theta = np.array([self.phi, self.F0, self.F1, self.F2])
+        self.theta = np.array([self.phi, self.F0, self.F1, self.F2, self.F3, self.F4])
 
         if self.h0 and np.any(
             [getattr(self, k, None) is None for k in self.required_signal_parameters]
@@ -891,6 +897,8 @@ class BinaryModulatedWriter(Writer):
         F0=None,
         F1=0,
         F2=0,
+        F3=0,
+        F4=0,
         Alpha=None,
         Delta=None,
         tp=0.0,
@@ -945,6 +953,8 @@ class BinaryModulatedWriter(Writer):
             F0=F0,
             F1=F1,
             F2=F2,
+            F3=F3,
+            F4=F4,
             Alpha=Alpha,
             Delta=Delta,
             h0=h0,
@@ -1131,10 +1141,14 @@ class GlitchWriter(SearchForSignalWithJumps, Writer):
         delta_F0=0,
         delta_F1=0,
         delta_F2=0,
+        delta_F3=0,
+        delta_F4=0,
         tref=None,
         F0=None,
         F1=0,
         F2=0,
+        F3=0,
+        F4=0,
         Alpha=None,
         Delta=None,
         h0=None,
@@ -1165,7 +1179,7 @@ class GlitchWriter(SearchForSignalWithJumps, Writer):
         dtglitch: float or None
             Time (in GPS seconds) of the glitch after `tstart`.
             To create data without a glitch, set `dtglitch=None`.
-        delta_phi, delta_F0, delta_F1: float
+        delta_phi, delta_F0, delta_F1, delta_F2, delta_F3, delta_F4: float
             Instantaneous glitch magnitudes in rad, Hz, and Hz/s respectively.
         """
 
@@ -1176,13 +1190,13 @@ class GlitchWriter(SearchForSignalWithJumps, Writer):
         shapes = np.array(
             [
                 np.shape(x)
-                for x in [self.delta_phi, self.delta_F0, self.delta_F1, self.delta_F2]
+                for x in [self.delta_phi, self.delta_F0, self.delta_F1, self.delta_F2, self.delta_F3, self.delta_F4]
             ]
         )
         if not np.all(shapes == shapes[0]):
             raise ValueError("all delta_* must be the same shape: {}".format(shapes))
 
-        for d in self.delta_phi, self.delta_F0, self.delta_F1, self.delta_F2:
+        for d in self.delta_phi, self.delta_F0, self.delta_F1, self.delta_F2, self.delta_F3, self.delta_F4:
             if np.size(d) == 1:
                 d = np.atleast_1d(d)
 
@@ -1198,10 +1212,10 @@ class GlitchWriter(SearchForSignalWithJumps, Writer):
         self.durations = tbs[1:] - tbs[:-1]
 
         self.delta_thetas = np.atleast_2d(
-            np.array([delta_phi, delta_F0, delta_F1, delta_F2]).T
+            np.array([delta_phi, delta_F0, delta_F1, delta_F2, delta_F3, delta_F4]).T
         )
 
-    def _get_base_template(self, i, Alpha, Delta, h0, cosi, psi, phi, F0, F1, F2, tref):
+    def _get_base_template(self, i, Alpha, Delta, h0, cosi, psi, phi, F0, F1, F2, F3, F4, tref):
         """FIXME: ported over from Writer,
         should be replaced by a more elegant reuse of _parse_args_consistent_with_mfd
         """
@@ -1215,18 +1229,20 @@ phi0 = {:1.18e}
 Freq = {:1.18e}
 f1dot = {:1.18e}
 f2dot = {:1.18e}
+f3dot = {:1.18e}
+f4dot = {:1.18e}
 refTime = {:10.6f}"""
 
     def _get_single_config_line_cw(
-        self, i, Alpha, Delta, h0, cosi, psi, phi, F0, F1, F2, tref
+        self, i, Alpha, Delta, h0, cosi, psi, phi, F0, F1, F2, F3, F4, tref
     ):
         template = (
             self._get_base_template(
-                i, Alpha, Delta, h0, cosi, psi, phi, F0, F1, F2, tref
+                i, Alpha, Delta, h0, cosi, psi, phi, F0, F1, F2, F3, F4, tref
             )
             + """\n"""
         )
-        return template.format(i, Alpha, Delta, h0, cosi, psi, phi, F0, F1, F2, tref)
+        return template.format(i, Alpha, Delta, h0, cosi, psi, phi, F0, F1, F2, F3, F4, tref)
 
     def _get_single_config_line_tcw(
         self,
@@ -1240,6 +1256,8 @@ refTime = {:10.6f}"""
         F0,
         F1,
         F2,
+        F3,
+        F4,
         tref,
         window,
         transientStartTime,
@@ -1247,7 +1265,7 @@ refTime = {:10.6f}"""
     ):
         template = (
             self._get_base_template(
-                i, Alpha, Delta, h0, cosi, psi, phi, F0, F1, F2, tref
+                i, Alpha, Delta, h0, cosi, psi, phi, F0, F1, F2, F3, F4, tref
             )
             + """
 transientWindowType = {:s}
@@ -1265,6 +1283,8 @@ transientTau = {:10.0f}\n"""
             F0,
             F1,
             F2,
+            F3,
+            F4,
             tref,
             window,
             transientStartTime,
@@ -1283,6 +1303,8 @@ transientTau = {:10.0f}\n"""
         F0,
         F1,
         F2,
+        F3,
+        F4,
         tref,
         window,
         transientStartTime,
@@ -1290,7 +1312,7 @@ transientTau = {:10.0f}\n"""
     ):
         if window == "none":
             return self._get_single_config_line_cw(
-                i, Alpha, Delta, h0, cosi, psi, phi, F0, F1, F2, tref
+                i, Alpha, Delta, h0, cosi, psi, phi, F0, F1, F2, F3, F4, tref
             )
         else:
             return self._get_single_config_line_tcw(
@@ -1304,6 +1326,8 @@ transientTau = {:10.0f}\n"""
                 F0,
                 F1,
                 F2,
+                F3,
+                F4,
                 tref,
                 window,
                 transientStartTime,
@@ -1336,6 +1360,8 @@ transientTau = {:10.0f}\n"""
                 t[1],
                 t[2],
                 t[3],
+                t[4],
+                t[5],
                 self.tref,
                 self.transientWindowType,
                 ts,

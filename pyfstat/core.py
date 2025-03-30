@@ -1,4 +1,6 @@
 """ The core tools used in pyfstat """
+#### (Damon Cheung) 
+#### Extend the signal parameter input to support up to 4th order frequency evolution parameters
 
 import getpass
 import glob
